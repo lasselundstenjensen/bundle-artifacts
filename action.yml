@@ -1,0 +1,45 @@
+name: 'Bundle Artifacts Action'
+description: 'Downloads and bundles artifacts based on a list of artifact names'
+inputs:
+  input_artifact_names:
+    description: 'A comma-separated list of full artifact names to bundle, e.g. "manual-test-results-validation-iv,manual-test-results-validation-pv"'
+    required: true
+  output_artifact_name:
+    description: 'The name of the bundled artifact to be uploaded, e.g. "manual-test-results-validation"'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Download and Bundle Artifacts
+      shell: bash
+      run: |
+        echo "Input Artifact Names: ${{ inputs.input_artifact_names }}"
+        echo "Output Artifact Name: ${{ inputs.output_artifact_name }}"
+
+        # Split the input_artifact_names into an array
+        IFS=',' read -r -a ARTIFACT_NAMES <<< "${{ inputs.input_artifact_names }}"
+
+        mkdir -p bundled_artifacts
+
+        for ARTIFACT_NAME in "${ARTIFACT_NAMES[@]}"; do
+          echo "Processing Artifact: $ARTIFACT_NAME"
+
+          # Download the artifact
+          echo "::group::Downloading $ARTIFACT_NAME"
+          mkdir -p "artifacts/$ARTIFACT_NAME"
+          cd "artifacts/$ARTIFACT_NAME"
+          wget -nv "${{ github.server_url }}/${{ github.repository }}/actions/artifacts/$ARTIFACT_NAME/zip" -O "$ARTIFACT_NAME.zip"
+          unzip -q "$ARTIFACT_NAME.zip"
+          rm "$ARTIFACT_NAME.zip"
+          cd ../../
+          echo "::endgroup::"
+
+          # Copy contents to bundled_artifacts
+          cp -r "artifacts/$ARTIFACT_NAME/." bundled_artifacts/
+        done
+
+    - name: Upload Bundled Artifact
+      uses: actions/upload-artifact@v4.4.0
+      with:
+        name: ${{ inputs.output_artifact_name }}
+        path: bundled_artifacts/
